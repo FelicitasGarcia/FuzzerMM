@@ -120,14 +120,11 @@ fn main() {
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
         .expect("Error in the fuzzing loop");
 }
-```
 
----
+// **Lo que necesitás para correrlo:**
 
-**Lo que necesitás para correrlo:**
+// 1. Carpeta `seeds/` con inputs reales, uno por archivo:
 
-1. Carpeta `seeds/` con inputs reales, uno por archivo:
-```
-seeds/
-  seed1    ← "archivo.txt"
-  seed2    ← "-n archivo.txt"
+// seeds/
+//   seed1    ← "archivo.txt"
+//   seed2    ← "-n archivo.txt"
