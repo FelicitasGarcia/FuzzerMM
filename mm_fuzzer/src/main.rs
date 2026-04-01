@@ -50,6 +50,7 @@ where
     S: libafl::state::State,
     EM: EventFirer<I, S>,
     OT: ObserversTuple<I, S>,
+    I: libafl::inputs::HasTargetBytes,
 {
     fn is_interesting(
         &mut self,
@@ -59,7 +60,16 @@ where
         _observers: &OT,
         _exit_kind: &libafl::executors::ExitKind,
     ) -> Result<bool, Error> {
-        Ok(read_mm_verdict() == 2)  // 2 = IV
+        let bytes = _input.target_bytes();
+        println!("[IVFeedback] input (hex): {}", bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
+        let raw = std::fs::read_to_string("/tmp/mm_verdict");
+        println!("[IVFeedback] /tmp/mm_verdict raw: {:?}", raw);
+        let verdict = raw
+            .ok()
+            .and_then(|s| s.trim().parse::<u8>().ok())
+            .unwrap_or(0);
+        println!("[IVFeedback] parsed verdict: {} → interesting: {}", verdict, verdict == 2);
+        Ok(verdict == 2)
     }
 }
 
@@ -70,7 +80,16 @@ fn main() {
     let pua_path = "/Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA";
 
     // EVENT MANAGER
-    let mon = SimpleMonitor::new(|s| println!("{s}"));
+    let mon = SimpleMonitor::new(|s| {
+        let s = s
+            .replace("pizzas", "corpus")
+            .replace("deliveries", "objectives")
+            .replace("doughs", "executions")
+            .replace("customers", "clients")
+            .replace("time to bake", "run time")
+            .replace("p/s", "exec/s");
+        println!("{s}");
+    });
     let mut mgr = SimpleEventManager::new(mon);
 
     // FEEDBACK
@@ -94,24 +113,26 @@ fn main() {
     // EXECUTOR — corre el PUA como proceso separado (un proceso por input)
     let mut executor = CommandExecutor::builder()
         .program(pua_path)
-        .arg_input_file_std()   // escribe el input a un archivo temporal y lo pasa como argumento
+        .arg_input_arg()   // pasa el input directamente como argumento en la línea de comandos
         .build(tuple_list!())
         .unwrap();
 
-    // SEEDS — cargás inputs reales en lugar de strings aleatorios
-    state.load_initial_inputs(
+    // SEEDS — carga solo el seed -1
+    state.load_initial_inputs_by_filenames(
         &mut fuzzer,
         &mut executor,
         &mut mgr,
-        &[PathBuf::from("./seeds")],
+        &[PathBuf::from("./seeds/seed_neg1")],
     )
     .expect("Failed to load seeds");
 
     // LOOP
-    let mutator = HavocScheduledMutator::new(havoc_mutations());
-    let mut stages = tuple_list!(StdMutationalStage::new(mutator));
+    // let mutator = HavocScheduledMutator::new(havoc_mutations());
+    // let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
-    fuzzer
-        .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-        .expect("Error in the fuzzing loop");
+    // fuzzer
+    //     .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
+    //     .expect("Error in the fuzzing loop");
+
+    println!("Single run done.");
 }
