@@ -1,0 +1,2 @@
+StdState<InMemoryCorpus<ValueInput<Vec<u8>>>, ValueInput<Vec<u8>>, RomuDuoJrRand, OnDiskCorpus<ValueInput<Vec<u8>>>>
+IVFeedback: StateInitializer<StdState<InMemoryCorpus<ValueInput<Vec<u8>>>, ValueInput<Vec<u8>>, RomuDuoJrRand, OnDiskCorpus<ValueInput<Vec<u8>>>>>

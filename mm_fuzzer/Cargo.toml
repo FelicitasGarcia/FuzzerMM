@@ -1,15 +1,11 @@
 [package]
-name = "baby_fuzzer"
-edition = "2024"
-version.workspace = true
-license.workspace = true
-repository.workspace = true
-readme.workspace = true
+name = "mm_fuzzer"
+version = "0.1.0"
+edition = "2021"
 
 [dependencies]
-
-libafl = { path = "../crates/libafl/" }
-libafl_bolts = { path = "../crates/libafl_bolts/" }
+libafl = { path = "../LibAFL/crates/libafl" }
+libafl_bolts = { path = "../LibAFL/crates/libafl_bolts" }
 
 [profile.dev]
 panic = "abort"
@@ -20,6 +16,3 @@ lto = true
 codegen-units = 1
 opt-level = 3
 debug = true
-
-[lints]
-workspace = true

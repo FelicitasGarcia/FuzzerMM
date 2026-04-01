@@ -1,31 +1,29 @@
 extern crate libafl;
 extern crate libafl_bolts;
 
+use std::borrow::Cow;
 use std::path::PathBuf;
 
 use libafl::{
     corpus::{InMemoryCorpus, OnDiskCorpus},
-    events::SimpleEventManager,
+    events::{EventFirer, SimpleEventManager},
     executors::forkserver::ForkserverExecutor,
-    feedbacks::{Feedback, CrashFeedback},
+    feedbacks::{Feedback, CrashFeedback, StateInitializer},
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
     monitors::SimpleMonitor,
     mutators::{scheduled::HavocScheduledMutator, havoc_mutations},
+    observers::ObserversTuple,
     schedulers::QueueScheduler,
     stages::mutational::StdMutationalStage,
     state::StdState,
-    events::EventFirer,
-    observers::ObserversTuple,
     Error,
 };
 use libafl_bolts::{
     rands::StdRand,
     tuples::tuple_list,
-    shmem::{ShMemProvider, UnixShMemProvider},
-    Named,
+    Named, StdTargetArgs,
 };
-use std::path::Path;
 
 // ── leer veredicto del MM desde archivo ──────────────────────────────────────
 fn read_mm_verdict() -> u8 {
@@ -39,32 +37,29 @@ fn read_mm_verdict() -> u8 {
 struct IVFeedback;
 
 impl Named for IVFeedback {
-    fn name(&self) -> &str {
-        "IVFeedback"
+    fn name(&self) -> &Cow<'static, str> {
+        static NAME: Cow<'static, str> = Cow::Borrowed("IVFeedback");
+        &NAME
     }
 }
 
-impl<S> Feedback<S> for IVFeedback
+impl<S> StateInitializer<S> for IVFeedback {}
+
+impl<EM, I, OT, S> Feedback<EM, I, OT, S> for IVFeedback
 where
     S: libafl::state::State,
+    EM: EventFirer<I, S>,
+    OT: ObserversTuple<I, S>,
 {
-    fn is_interesting<EM, OT>(
+    fn is_interesting(
         &mut self,
         _state: &mut S,
         _manager: &mut EM,
-        _input: &S::Input,
+        _input: &I,
         _observers: &OT,
         _exit_kind: &libafl::executors::ExitKind,
-    ) -> Result<bool, Error>
-    where
-        EM: EventFirer<State = S>,
-        OT: ObserversTuple<S>,
-    {
+    ) -> Result<bool, Error> {
         Ok(read_mm_verdict() == 2)  // 2 = IV
-    }
-
-    fn init_state(&mut self, _state: &mut S) -> Result<(), Error> {
-        Ok(())
     }
 }
 
@@ -72,7 +67,7 @@ where
 fn main() {
 
     // path al PUA instrumentado con MM
-    let pua_path = "/path/to/coreutils/src/instrumentedPUA";
+    let pua_path = "/Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA";
 
     // EVENT MANAGER
     let mon = SimpleMonitor::new(|s| println!("{s}"));
@@ -120,11 +115,3 @@ fn main() {
         .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
         .expect("Error in the fuzzing loop");
 }
-
-// **Lo que necesitás para correrlo:**
-
-// 1. Carpeta `seeds/` con inputs reales, uno por archivo:
-
-// seeds/
-//   seed1    ← "archivo.txt"
-//   seed2    ← "-n archivo.txt"
