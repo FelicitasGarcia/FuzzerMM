@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use libafl::{
     corpus::{InMemoryCorpus, OnDiskCorpus},
     events::{EventFirer, SimpleEventManager},
-    executors::forkserver::ForkserverExecutor,
+    executors::command::CommandExecutor,
     feedbacks::{Feedback, CrashFeedback, StateInitializer},
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
@@ -91,10 +91,10 @@ fn main() {
     let scheduler = QueueScheduler::new();
     let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
-    // EXECUTOR — corre el PUA como proceso separado
-    let mut executor = ForkserverExecutor::builder()
+    // EXECUTOR — corre el PUA como proceso separado (un proceso por input)
+    let mut executor = CommandExecutor::builder()
         .program(pua_path)
-        .parse_afl_cmdline(["@@"])  // @@ = archivo con el input
+        .arg_input_file_std()   // escribe el input a un archivo temporal y lo pasa como argumento
         .build(tuple_list!())
         .unwrap();
 
