@@ -8,7 +8,7 @@ use libafl::{
     corpus::{InMemoryCorpus, OnDiskCorpus},
     events::{EventFirer, SimpleEventManager},
     executors::command::CommandExecutor,
-    feedbacks::{Feedback, CrashFeedback, StateInitializer},
+    feedbacks::{Feedback, StateInitializer},
     fuzzer::{Fuzzer, StdFuzzer},
     inputs::BytesInput,
     monitors::SimpleMonitor,
@@ -94,13 +94,13 @@ fn main() {
 
     // FEEDBACK
     let mut feedback = IVFeedback;
-    let mut objective = CrashFeedback::new();
+    let mut objective = libafl::feedbacks::ConstFeedback::new(false); // nunca crashea
 
-    // STATE
+    // STATE — corpus en disco para persistir los IV inputs
     let mut state = StdState::new(
         StdRand::new(),
-        InMemoryCorpus::<BytesInput>::new(),
-        OnDiskCorpus::new(PathBuf::from("./solutions")).unwrap(),
+        OnDiskCorpus::<BytesInput>::new(PathBuf::from("./iv_inputs")).unwrap(),
+        OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
         &mut feedback,
         &mut objective,
     )
@@ -118,21 +118,25 @@ fn main() {
         .unwrap();
 
     // SEEDS — carga solo el seed -1
-    state.load_initial_inputs_by_filenames(
+    state.load_initial_inputs(
         &mut fuzzer,
         &mut executor,
         &mut mgr,
-        &[PathBuf::from("./seeds/seed_neg1")],
+        &[PathBuf::from("./seeds")],
     )
     .expect("Failed to load seeds");
 
     // LOOP
-    // let mutator = HavocScheduledMutator::new(havoc_mutations());
-    // let mut stages = tuple_list!(StdMutationalStage::new(mutator));
+    let mutator = HavocScheduledMutator::new(havoc_mutations());
+    let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
-    // fuzzer
-    //     .fuzz_loop(&mut stages, &mut executor, &mut state, &mut mgr)
-    //     .expect("Error in the fuzzing loop");
+    loop {
+        match fuzzer.fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr) {
+            Ok(_) => {},
+            Err(libafl::Error::OsError(..)) => {}, // input con null byte, se saltea
+            Err(e) => panic!("Error fatal en el loop: {e}"),
+        }
+    }
 
     println!("Single run done.");
 }
