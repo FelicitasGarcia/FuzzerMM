@@ -1,0 +1,17 @@
+# Build
+**/target/
+
+# Fuzzer outputs
+**/iv_inputs/*
+!**/iv_inputs/.gitkeep
+**/crashes/*
+!**/crashes/.gitkeep
+**/solutions/*
+!**/solutions/.gitkeep
+
+# LibAFL temp input files
+**/.cur_input_*
+
+# macOS
+.DS_Store
+**/.DS_Store
