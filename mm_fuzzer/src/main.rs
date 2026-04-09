@@ -2,18 +2,15 @@ extern crate libafl;
 extern crate libafl_bolts;
 
 use std::borrow::Cow;
-use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
 
 use libafl::{
-    corpus::OnDiskCorpus,
+    corpus::{InMemoryCorpus, OnDiskCorpus},
     events::{EventFirer, SimpleEventManager},
-    executors::{command::CommandExecutor, StdChildArgs},
+    executors::command::CommandExecutor,
     feedbacks::{Feedback, StateInitializer},
     fuzzer::{Fuzzer, StdFuzzer},
-    inputs::{BytesInput, HasTargetBytes},
+    inputs::BytesInput,
     monitors::SimpleMonitor,
     mutators::{scheduled::HavocScheduledMutator, havoc_mutations},
     observers::ObserversTuple,
@@ -28,17 +25,8 @@ use libafl_bolts::{
     Named, StdTargetArgs,
 };
 
-// ── Feedback custom: interesante si MM emitió IV, sin duplicados ─────────────
-struct IVFeedback {
-    seen: HashSet<Vec<u8>>,
-    last_iv_found: Arc<Mutex<Instant>>,
-}
-
-impl IVFeedback {
-    fn new(last_iv_found: Arc<Mutex<Instant>>) -> Self {
-        Self { seen: HashSet::new(), last_iv_found }
-    }
-}
+// ── Feedback custom: interesante si MM emitió IV ─────────────────────────────
+struct IVFeedback;
 
 impl Named for IVFeedback {
     fn name(&self) -> &Cow<'static, str> {
@@ -54,7 +42,7 @@ where
     S: libafl::state::State,
     EM: EventFirer<I, S>,
     OT: ObserversTuple<I, S>,
-    I: HasTargetBytes,
+    I: libafl::inputs::HasTargetBytes,
 {
     fn is_interesting(
         &mut self,
@@ -65,62 +53,63 @@ where
         _exit_kind: &libafl::executors::ExitKind,
     ) -> Result<bool, Error> {
         let bytes = _input.target_bytes();
+        println!("[IVFeedback] input (hex): {}", bytes.iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" "));
         let raw = std::fs::read_to_string("/tmp/mm_verdict");
+        println!("[IVFeedback] /tmp/mm_verdict raw: {:?}", raw);
         let verdict = raw
             .ok()
             .and_then(|s| s.trim().parse::<u8>().ok())
             .unwrap_or(0);
-
-        println!("[exec] input: {:?}  verdict: {}", String::from_utf8_lossy(&bytes), verdict);
-
-        if verdict != 2 {
-            return Ok(false);
-        }
-
-        let key = bytes.to_vec();
-        if self.seen.contains(&key) {
-            println!("[IVFeedback] IV duplicado, descartado: {}", String::from_utf8_lossy(&key));
-            return Ok(false);
-        }
-
-        self.seen.insert(key.clone());
-        *self.last_iv_found.lock().unwrap() = Instant::now();
-        println!("[IVFeedback] IV nuevo encontrado: {}", String::from_utf8_lossy(&key));
-        Ok(true)
+        println!("[IVFeedback] parsed verdict: {} → interesting: {}", verdict, verdict == 2);
+        Ok(verdict == 2)
     }
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
 fn main() {
+
+    // path al PUA instrumentado con MM
     let pua_path = "/Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA";
 
-    let mon = SimpleMonitor::new(|s| println!("{s}"));
+    // EVENT MANAGER
+    let mon = SimpleMonitor::new(|s| {
+        let s = s
+            .replace("pizzas", "corpus")
+            .replace("deliveries", "objectives")
+            .replace("doughs", "executions")
+            .replace("customers", "clients")
+            .replace("time to bake", "run time")
+            .replace("p/s", "exec/s");
+        println!("{s}");
+    });
     let mut mgr = SimpleEventManager::new(mon);
 
-    let last_iv_found = Arc::new(Mutex::new(Instant::now()));
+    // FEEDBACK
+    let mut feedback = IVFeedback;
+    let mut objective = libafl::feedbacks::ConstFeedback::new(false); // nunca crashea
 
-    let mut feedback = IVFeedback::new(Arc::clone(&last_iv_found));
-    let mut objective = libafl::feedbacks::ConstFeedback::new(false);
-
+    // STATE 
     let mut state = StdState::new(
         StdRand::new(),
-        OnDiskCorpus::<BytesInput>::new(PathBuf::from("./iv_inputs")).unwrap(),
+        InMemoryCorpus::<BytesInput>::new(),
         OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
         &mut feedback,
         &mut objective,
     )
     .unwrap();
 
+    // FUZZER
     let scheduler = QueueScheduler::new();
     let mut fuzzer = StdFuzzer::new(scheduler, feedback, objective);
 
+    // EXECUTOR — corre el PUA como proceso separado (un proceso por input)
     let mut executor = CommandExecutor::builder()
         .program(pua_path)
-        .arg_input_arg()
-        .timeout(std::time::Duration::from_secs(5))
+        .arg_input_arg()   // pasa el input directamente como argumento en la línea de comandos
         .build(tuple_list!())
         .unwrap();
 
+    // SEEDS — carga solo el seed -1
     state.load_initial_inputs(
         &mut fuzzer,
         &mut executor,
@@ -129,20 +118,16 @@ fn main() {
     )
     .expect("Failed to load seeds");
 
+    // LOOP
     let mutator = HavocScheduledMutator::new(havoc_mutations());
     let mut stages = tuple_list!(StdMutationalStage::new(mutator));
 
-    const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(60);
-
     loop {
-        if last_iv_found.lock().unwrap().elapsed() > IDLE_TIMEOUT {
-            println!("[timeout] No se encontraron IVs nuevos en {}s, terminando.", IDLE_TIMEOUT.as_secs());
-            break;
-        }
-
         match fuzzer.fuzz_one(&mut stages, &mut executor, &mut state, &mut mgr) {
             Ok(_) => {},
-            Err(e) => eprintln!("[WARN] fuzz_one error (skipped): {e:?}"),
+            Err(libafl::Error::OsError(..)) => {}, // input con null byte, se saltea
+            Err(e) => panic!("Error fatal en el loop: {e}"),
         }
     }
 }
+
