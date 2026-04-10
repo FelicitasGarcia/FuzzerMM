@@ -51,8 +51,15 @@ where
         _manager: &mut EM,
         input: &I,
         _observers: &OT,
-        _exit_kind: &libafl::executors::ExitKind,
+        exit_kind: &libafl::executors::ExitKind,
     ) -> Result<bool, Error> {
+        let bytes = input.target_bytes();
+        println!("[IVFeedback] input: {:?}", String::from_utf8_lossy(&bytes));
+        let crashed = matches!(exit_kind, libafl::executors::ExitKind::Crash);
+        if crashed {
+            println!("[IVFeedback] crash detectado → interesting: true");
+            return Ok(true);
+        }
         let raw = std::fs::read_to_string("/tmp/mm_verdict");
         println!("[IVFeedback] /tmp/mm_verdict raw: {:?}", raw);
         let verdict = raw
@@ -62,7 +69,6 @@ where
         println!("[IVFeedback] parsed verdict: {} → interesting: {}", verdict, verdict == 2);
         let interesting = verdict == 2;
         if interesting {
-            let bytes = input.target_bytes();
             println!("[IVFeedback] IV detectado — input (string): {:?}", String::from_utf8_lossy(&bytes));
         }
         Ok(interesting)
@@ -98,7 +104,7 @@ fn main() {
         .build(tuple_list!())
         .unwrap();
 
-    state.load_initial_inputs_forced(
+    state.load_initial_inputs(
         &mut fuzzer,
         &mut executor,
         &mut mgr,
