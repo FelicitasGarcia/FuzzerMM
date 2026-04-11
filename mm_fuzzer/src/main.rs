@@ -77,7 +77,7 @@ where
 
 // ── main ─────────────────────────────────────────────────────────────────────
 fn main() {
-    let pua_path = "/Users/felicitasgarcia/FuzzerMM/mm_fuzzer/pua_wrapper.sh";
+    let pua_path = "/Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA";
 
     let mon = SimpleMonitor::new(|s| println!("{s}"));
     let mut mgr = SimpleEventManager::new(mon);
