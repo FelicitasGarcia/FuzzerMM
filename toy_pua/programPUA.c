@@ -12,19 +12,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int classify(int n) {
-    if (n < 0)    return -1;
-    if (n == 0)   return  0;
-    if (n < 127)  return  1;  /* BUG: should be 128 — off-by-one regression */
-    return 2;
-}
-
 int main(int argc, char *argv[]) {
-    if (argc < 2) {
+    if (argc < 2)
+    {
         fprintf(stderr, "usage: %s <integer>\n", argv[0]);
         return 1;
     }
     int n = atoi(argv[1]);
-    printf("%d\n", classify(n));
-    return 0;
+    int result;
+    if (n < 0)
+        result = -1;
+    else if (n == 0)
+        result = 0;
+    else if (n < 128)
+        result = 1;
+    else
+        result = 2;
+    return 10 / result;
 }
