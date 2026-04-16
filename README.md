@@ -39,10 +39,7 @@ FuzzerMM/
 
 - Rust (stable toolchain, edition 2021+)
 - LibAFL sources available locally in `./LibAFL`
-- A compiled, MM-instrumented PUA binary at the path set in `mm_fuzzer/src/main.rs`:
-  ```
-  /Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA
-  ```
+- A compiled, MM-instrumented PUA binary. You can pass its path with the `MM_PUA_PATH` environment variable.
 - MimicryMonitor must be set up to write its verdict to `/tmp/mm_verdict` after each PUA execution.
 
 ---
@@ -76,12 +73,14 @@ cargo build --release
 
 ## Running
 
-Make sure the instrumented PUA binary exists and MimicryMonitor is configured to write to `/tmp/mm_verdict`, then:
+Make sure the instrumented PUA binary exists and MimicryMonitor is configured to write to `/tmp/mm_verdict`, then run the fuzzer with the PUA path you want to use:
 
 ```bash
 cd mm_fuzzer
-cargo run --release
+MM_PUA_PATH=/ruta/al/instrumentedPUA cargo run --release
 ```
+
+If you do not set `MM_PUA_PATH`, the fuzzer falls back to the default path currently hardcoded in `mm_fuzzer/src/main.rs`.
 
 The fuzzer will:
 - Load seeds from `./seeds/`
