@@ -38,11 +38,29 @@ FuzzerMM/
 ## Requirements
 
 - Rust (stable toolchain, edition 2021+)
+- LibAFL sources available locally in `./LibAFL`
 - A compiled, MM-instrumented PUA binary at the path set in `mm_fuzzer/src/main.rs`:
   ```
   /Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA
   ```
 - MimicryMonitor must be set up to write its verdict to `/tmp/mm_verdict` after each PUA execution.
+
+---
+
+## Downloading LibAFL
+
+From the project root (`FuzzerMM/`), clone LibAFL if it is not present yet:
+
+```bash
+git clone https://github.com/AFLplusplus/LibAFL.git
+```
+
+If the `LibAFL/` folder already exists, update it instead:
+
+```bash
+cd LibAFL
+git pull
+```
 
 ---
 
