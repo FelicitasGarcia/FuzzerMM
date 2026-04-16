@@ -77,7 +77,17 @@ where
 
 // ── main ─────────────────────────────────────────────────────────────────────
 fn main() {
-    let pua_path = "/Users/felicitasgarcia/MM/mimicrymonitor/llvm/feli/outputs/instrumentedPUA";
+    let manifest_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let seeds_dir = manifest_dir.join("seeds");
+    let crashes_dir = manifest_dir.join("crashes");
+
+    let pua_path = std::env::var("MM_PUA_PATH").unwrap_or_else(|_| {
+        "/home/felicitas/DOC/MM/MimicryMonitor/llvm/feli/outputs/instrumentedPUA".to_string()
+    });
+
+    if !seeds_dir.is_dir() {
+        panic!("Seeds directory not found at {}", seeds_dir.display());
+    }
 
     let mon = SimpleMonitor::new(|s| println!("{s}"));
     let mut mgr = SimpleEventManager::new(mon);
@@ -88,7 +98,7 @@ fn main() {
     let mut state = StdState::new(
         StdRand::new(),
         InMemoryCorpus::<BytesInput>::new(),
-        OnDiskCorpus::new(PathBuf::from("./crashes")).unwrap(),
+        OnDiskCorpus::new(crashes_dir).unwrap(),
         &mut feedback,
         &mut objective,
     )
@@ -100,7 +110,7 @@ fn main() {
     let mut executor = CommandExecutor::builder()
         .program(pua_path)
         .arg_input_arg()
-.timeout(std::time::Duration::from_secs(5))
+        .timeout(std::time::Duration::from_secs(5))
         .build(tuple_list!())
         .unwrap();
 
@@ -108,7 +118,7 @@ fn main() {
         &mut fuzzer,
         &mut executor,
         &mut mgr,
-        &[PathBuf::from("./seeds")],
+        &[seeds_dir],
     )
     .expect("Failed to load seeds");
 
